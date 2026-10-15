@@ -1,0 +1,31 @@
+{
+  "name": "spentry",
+  "private": true,
+  "type": "module",
+  "description": "Anota cada gasto y mira a dónde va tu dinero.",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "db:init": "node scripts/db-init.mjs",
+    "db:demo": "node scripts/seed-demo.mjs",
+    "typecheck": "nuxt typecheck"
+  },
+  "devDependencies": {
+    "@nuxtjs/google-fonts": "^3.2.0",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@types/web-push": "^3.6.4",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "nuxt": "^4.4.7",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.3",
+    "vue": "^3.5.35",
+    "vue-router": "^5.1.0"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.6",
+    "web-push": "^3.6.7"
+  }
+}
