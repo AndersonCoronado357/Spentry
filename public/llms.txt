@@ -1,0 +1,30 @@
+# Spentry
+
+> Spentry es una app web para anotar gastos personales en segundos, organizarlos por categorías y ver a dónde va el dinero con estadísticas claras. Funciona en el celular y en la PC, y se puede instalar como app. Está en español.
+
+Dirección: https://spentry.acmsy.com/
+
+## Qué hace
+
+- Registro de gastos en segundos con un teclado tipo caja registradora: se teclea el monto, se elige la categoría y el gasto sale impreso como un recibo.
+- Cada gasto queda guardado como un recibo con número de folio, fecha, hora, categoría y nota opcional.
+- Categorías personalizables con nombre, icono y color.
+- Movimientos por mes con búsqueda (por nota, categoría o folio) y filtro por categoría.
+- Estadísticas: total del mes, comparación con el mes anterior, promedio diario, día más caro, gasto más alto, gasto día a día, reparto por categoría y los últimos 6 meses.
+- Presupuesto mensual opcional, visible en el inicio.
+- Recordatorio diario por notificación para no olvidar anotar.
+- Exportación de todos los gastos a un archivo CSV.
+- Varias monedas: peso colombiano (COP), dólar (USD), euro (EUR), peso mexicano (MXN), sol peruano (PEN) y peso chileno (CLP).
+- Modo claro, oscuro o según el sistema.
+- Se instala como app (PWA) en Android, iOS y PC desde el navegador.
+- Inicio de sesión con correo y contraseña o con Google.
+
+## Para quién es
+
+Para personas que quieren llevar el control de sus gastos del día a día sin hojas de cálculo: anotar rápido lo que gastan y entender en qué se les va el dinero cada mes.
+
+## Cómo empezar
+
+1. Entra a https://spentry.acmsy.com/ y crea una cuenta (o entra con Google).
+2. Anota tu primer gasto con el botón «+» o «Registrar gasto».
+3. Revisa tus movimientos y estadísticas del mes.

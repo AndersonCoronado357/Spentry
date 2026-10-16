@@ -1,0 +1,12 @@
+# Spentry · https://spentry.acmsy.com
+# La portada es pública; las secciones de la cuenta y la API no se indexan.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /movimientos
+Disallow: /estadisticas
+Disallow: /categorias
+Disallow: /ajustes
+
+Sitemap: https://spentry.acmsy.com/sitemap.xml
