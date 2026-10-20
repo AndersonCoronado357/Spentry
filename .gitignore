@@ -31,3 +31,8 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 launch.json
+
+# Guías y videos locales (no van al repo)
+*.md
+!README.md
+media/
