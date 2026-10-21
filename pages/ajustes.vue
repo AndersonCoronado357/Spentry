@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { TemaPref } from '~/composables/useTema'
-import { CURRENCIES, symbolOf, formatShort, folioStr, isoD, catPorId, hoy, inMonth, total } from '~/composables/useDatos'
+import { CURRENCIES, symbolOf, formatShort, folioStr, isoD, catPorId, hoy, inPeriodo, periodoDe, total } from '~/composables/useDatos'
 
 useHead({ title: 'Ajustes · Spentry' })
 
 const { usuario, moneda, budget, remindDaily, remindHour, hasPassword, gastos, categorias } = useDatos()
-const totalMes = computed(() => total(inMonth(gastos.value, hoy().getFullYear(), hoy().getMonth()), moneda.value))
+const totalMes = computed(() => total(inPeriodo(gastos.value, periodoDe(hoy())), moneda.value))
 const { pref, aplicar } = useTema()
 const { mostrar } = useToast()
 const push = usePush()
@@ -152,7 +152,7 @@ const fmtCorto = (v: number) => formatShort(v, moneda.value)
         <div class="profile-stats">
           <div><b class="num"><StOdometer :value="gastos.length" :fmt="fmtNum" rodar /></b><span class="faint">recibos</span></div>
           <div><b class="num"><StOdometer :value="categorias.length" :fmt="fmtNum" rodar /></b><span class="faint">categorías</span></div>
-          <div><b class="num"><StOdometer :value="totalMes" :fmt="fmtCorto" rodar /></b><span class="faint">este mes</span></div>
+          <div><b class="num"><StOdometer :value="totalMes" :fmt="fmtCorto" rodar /></b><span class="faint">esta quincena</span></div>
         </div>
 
         <div class="col" style="gap: 14px">
@@ -198,13 +198,13 @@ const fmtCorto = (v: number) => formatShort(v, moneda.value)
             <div class="set-row">
               <span class="set-ic"><StIcon name="target" :size="19" /></span>
               <div class="col grow" style="gap: 2px">
-                <span class="set-title">Presupuesto mensual</span>
+                <span class="set-title">Presupuesto quincenal</span>
                 <span class="faint" style="font-size: .85rem">{{ budget ? 'Se muestra en Inicio' : 'Opcional' }}</span>
               </div>
               <div style="width: min(200px, 44%)">
                 <label class="input-wrap">
                   <span class="input-icon l" style="font-weight: 700">{{ symbolOf(moneda) }}</span>
-                  <input :value="budgetTxt" class="input has-icon-l num" inputmode="numeric" placeholder="Sin presupuesto" aria-label="Presupuesto mensual" @beforeinput="soloDigitos" @input="onBudget" />
+                  <input :value="budgetTxt" class="input has-icon-l num" inputmode="numeric" placeholder="Sin presupuesto" aria-label="Presupuesto quincenal" @beforeinput="soloDigitos" @input="onBudget" />
                 </label>
               </div>
             </div>

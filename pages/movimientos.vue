@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  hoy, inMonth, total, groupByDay, byCategory, formatMoney, folioStr, DIAS_COR, MESES_COR, MESES,
-  daysBetween, catPorId,
+  hoy, inPeriodo, total, groupByDay, byCategory, formatMoney, folioStr, DIAS_COR, MESES_COR,
+  daysBetween, catPorId, periodoDe, ordenPeriodo, etiquetaPeriodo, type Periodo,
 } from '~/composables/useDatos'
 
 useHead({ title: 'Movimientos · Spentry' })
@@ -13,12 +13,11 @@ const { abrir } = useRegistro()
 const { mostrar } = useToast()
 const { onEnter, onLeave } = useListaAnimada()
 
-const y = ref(hoy().getFullYear())
-const m = ref(hoy().getMonth())
+const per = ref<Periodo>(periodoDe(hoy()))
 const q = ref('')
 const cat = ref<string>(typeof route.query.cat === 'string' ? route.query.cat : 'todas')
 
-const delMes = computed(() => inMonth(gastos.value, y.value, m.value))
+const delMes = computed(() => inPeriodo(gastos.value, per.value))
 const filtrados = computed(() => {
   const s = q.value.trim().toLowerCase()
   return delMes.value.filter(g =>
@@ -37,16 +36,16 @@ const diaMayor = computed(() => {
 })
 const promedioRecibo = computed(() => (delMes.value.length ? totalMes.value / delMes.value.length : 0))
 
-// La lista se re-monta al cambiar de mes o filtro (sin animar cada fila); las
+// La lista se re-monta al cambiar de quincena o filtro (sin animar cada fila); las
 // altas y bajas dentro de una misma vista sí se animan.
-const vistaKey = computed(() => `${y.value}-${m.value}-${cat.value}-${q.value.trim()}`)
+const vistaKey = computed(() => `${ordenPeriodo(per.value)}-${cat.value}-${q.value.trim()}`)
 
 function cabecera(d: Date) {
   const n = daysBetween(d, hoy())
   const base = `${DIAS_COR[d.getDay()]} ${d.getDate()} ${MESES_COR[d.getMonth()]}`
   return n === 0 ? `Hoy · ${base}` : n === 1 ? `Ayer · ${base}` : base
 }
-// Celular: el mes va junto al título, abreviado, y el filtro de categorías se
+// Celular: la quincena va junto al título, abreviada, y el filtro de categorías se
 // comprime en un botón al lado del buscador.
 const movil = useMediaQuery('(max-width: 899px)')
 // La cinta se imprime solo al entrar a la vista (ver .movs-entrando en CSS).
@@ -60,11 +59,11 @@ function elegirFiltro(id: string) {
   filtroAbierto.value = false
 }
 
-// Al cambiar de mes la cinta entra desde el lado hacia el que se navega.
+// Al cambiar de quincena la cinta entra desde el lado hacia el que se navega.
 const dirMes = ref<'next' | 'prev'>('next')
-function cambiarMes(ny: number, nm: number) {
-  dirMes.value = ny * 12 + nm > y.value * 12 + m.value ? 'next' : 'prev'
-  y.value = ny; m.value = nm
+function cambiarMes(p: Periodo) {
+  dirMes.value = ordenPeriodo(p) > ordenPeriodo(per.value) ? 'next' : 'prev'
+  per.value = p
 }
 
 function anular(id: string) {
@@ -86,7 +85,7 @@ function anular(id: string) {
         <span class="eyebrow">Tus recibos</span>
         <h1 class="page-title">Movimientos</h1>
       </div>
-      <StMonthSwitch :y="y" :m="m" :corto="movil" @change="cambiarMes" />
+      <StMonthSwitch :y="per.y" :m="per.m" :q="per.q" :corto="movil" @change="cambiarMes" />
     </header>
 
     <div class="movs-grid">
@@ -165,7 +164,7 @@ function anular(id: string) {
                 </TransitionGroup>
               </section>
               <div class="tape-end">
-                <span>Total {{ MESES[m] }}</span>
+                <span>Total {{ etiquetaPeriodo(per, true) }}</span>
                 <i class="tape-dots" />
                 <span class="num">{{ formatMoney(totalFiltro, moneda) }}</span>
               </div>
@@ -177,7 +176,7 @@ function anular(id: string) {
                 <span class="muted" style="font-size: .9rem">Prueba con otra búsqueda o categoría.</span>
               </template>
               <template v-else>
-                <span class="st-title" style="font-weight: 600">Sin recibos en {{ MESES[m] }}</span>
+                <span class="st-title" style="font-weight: 600">Sin recibos del {{ etiquetaPeriodo(per, true) }}</span>
                 <span class="muted" style="font-size: .9rem">Cuando anotes un gasto aparecerá aquí.</span>
                 <button type="button" class="btn btn-primary" style="margin-top: 8px" @click="abrir()">
                   <StIcon name="plus" :size="17" />Registrar gasto
@@ -192,7 +191,7 @@ function anular(id: string) {
       <!-- Resumen del mes (escritorio ancho) -->
       <aside class="movs-side">
         <div class="card side-card">
-          <span class="eyebrow">Total de {{ MESES[m] }}</span>
+          <span class="eyebrow">Total del {{ etiquetaPeriodo(per, true) }}</span>
           <span class="side-total"><StOdometer :value="totalMes" :code="moneda" /></span>
           <div class="side-stats">
             <div><span class="faint">Recibos</span><b class="num">{{ delMes.length }}</b></div>

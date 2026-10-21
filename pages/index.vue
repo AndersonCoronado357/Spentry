@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  hoy, inMonth, onDay, total, byCategory, lastDays, formatMoney, formatShort,
-  MESES, DIAS_COR, dayLabel, folioStr, sameDay,
+  hoy, inPeriodo, onDay, total, byCategory, lastDays, formatMoney, formatShort,
+  DIAS_COR, dayLabel, folioStr, sameDay, periodoDe, rangoDe,
 } from '~/composables/useDatos'
 
 useHead({ title: 'Inicio · Spentry' })
@@ -22,13 +22,14 @@ function congelado<T>(src: () => T) {
 }
 
 const ahora = hoy()
-const y = ahora.getFullYear()
-const m = ahora.getMonth()
+// La caja se ve por quincena: del 1 al 15 y del 16 a fin de mes.
+const per = periodoDe(ahora)
+const { ini, fin } = rangoDe(per)
 
-const delMes = computed(() => inMonth(gastos.value, y, m))
+const delMes = computed(() => inPeriodo(gastos.value, per))
 const totalMes = computed(() => total(delMes.value, moneda.value))
 const totalHoy = computed(() => total(onDay(gastos.value, ahora), moneda.value))
-const promedio = computed(() => totalMes.value / ahora.getDate())
+const promedio = computed(() => totalMes.value / (ahora.getDate() - ini + 1))
 const recientes = computed(() =>
   [...gastos.value]
     .sort((a, b) => b.date.getTime() - a.date.getTime() || b.createdAt.getTime() - a.createdAt.getTime())
@@ -83,7 +84,7 @@ function anular(id: string) {
     <header class="page-head">
       <div class="col grow" style="min-width: 0">
         <span class="eyebrow ellipsis">{{ saludo }}{{ nombre ? `, ${nombre}` : '' }}</span>
-        <h1 class="page-title">Tu caja de {{ MESES[m] }}</h1>
+        <h1 class="page-title">Tu caja del {{ ini }} al {{ fin }}</h1>
       </div>
       <NuxtLink to="/ajustes" class="head-av only-mobile" aria-label="Ajustes y perfil">
         <img v-if="usuario.photo" :src="usuario.photo" alt="" />
@@ -92,10 +93,10 @@ function anular(id: string) {
     </header>
 
     <div class="home-grid">
-      <!-- Total del mes -->
+      <!-- Total de la quincena -->
       <section class="card hero">
         <div class="hero-top">
-          <span class="muted" style="font-size: .92rem; font-weight: 700">Gastado en {{ MESES[m] }}</span>
+          <span class="muted" style="font-size: .92rem; font-weight: 700">Gastado esta quincena</span>
           <span class="badge">{{ delMes.length }} {{ delMes.length === 1 ? 'recibo' : 'recibos' }}</span>
         </div>
         <div class="hero-num"><StOdometer :value="totalVista" :code="moneda" id="home-total" /></div>
@@ -190,7 +191,7 @@ function anular(id: string) {
         </StScroll>
         <div v-else class="empty fill-empty">
           <StIcon name="chart" :size="30" style="color: var(--text3)" />
-          <span class="muted" style="font-size: .9rem">Aún no hay gastos este mes</span>
+          <span class="muted" style="font-size: .9rem">Aún no hay gastos esta quincena</span>
         </div>
       </section>
     </div>

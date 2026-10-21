@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Categoria } from '~/types/gasto'
-import { hoy, inMonth, total, formatMoney, MESES } from '~/composables/useDatos'
+import { hoy, inPeriodo, periodoDe, total, formatMoney } from '~/composables/useDatos'
 
 useHead({ title: 'Categorías · Spentry' })
 
@@ -16,7 +16,7 @@ const ahora = hoy()
 // Mientras la vista entra, los iconos se dibujan (ver .cats-entrando en CSS).
 const entrando = ref(true)
 onMounted(() => setTimeout(() => { entrando.value = false }, 1700))
-const delMes = computed(() => inMonth(gastos.value, ahora.getFullYear(), ahora.getMonth()))
+const delMes = computed(() => inPeriodo(gastos.value, periodoDe(ahora)))
 const totalMes = computed(() => total(delMes.value, moneda.value))
 const stats = computed(() => {
   const m: Record<string, { mes: number; count: number }> = {}
@@ -57,7 +57,7 @@ const stats = computed(() => {
             </span>
             <span class="col" style="align-items: flex-end; gap: 3px; flex-shrink: 0">
               <span class="num cat-card-amt">{{ formatMoney(stats[c.id]?.mes ?? 0, moneda) }}</span>
-              <span class="faint" style="font-size: .76rem; font-weight: 600">en {{ MESES[ahora.getMonth()] }}</span>
+              <span class="faint" style="font-size: .76rem; font-weight: 600">esta quincena</span>
             </span>
           </button>
           <div class="cat-card-foot">

@@ -147,6 +147,28 @@ function parseDT(s: string | null | undefined): Date {
   return isNaN(d.getTime()) ? new Date() : d
 }
 export function monthKey(y: number, m: number) { return `${y}-${m}` }
+
+// ── Quincenas: la app se ve por quincena (del 1 al 15 y del 16 a fin de mes) ──
+export interface Periodo { y: number; m: number; q: number }   // q: 0 = del 1 al 15 · 1 = del 16 a fin de mes
+export function diasDelMes(y: number, m: number) { return new Date(y, m + 1, 0).getDate() }
+export function periodoDe(d: Date): Periodo { return { y: d.getFullYear(), m: d.getMonth(), q: d.getDate() <= 15 ? 0 : 1 } }
+export function rangoDe(p: Periodo) { return { ini: p.q ? 16 : 1, fin: p.q ? diasDelMes(p.y, p.m) : 15 } }
+export const ordenPeriodo = (p: Periodo) => p.y * 24 + p.m * 2 + p.q
+export const mismoPeriodo = (a: Periodo, b: Periodo) => ordenPeriodo(a) === ordenPeriodo(b)
+export function moverPeriodo(p: Periodo, delta: number): Periodo {
+  const i = ordenPeriodo(p) + delta
+  return { y: Math.floor(i / 24), m: Math.floor((i % 24) / 2), q: i % 2 }
+}
+/** "16–31 oct" (corto) · "16–31 de octubre" */
+export function etiquetaPeriodo(p: Periodo, corto = false): string {
+  const { ini, fin } = rangoDe(p)
+  return corto ? `${ini}–${fin} ${MESES_COR[p.m]}` : `${ini}–${fin} de ${MESES[p.m]}`
+}
+/** "del 16 al 31 de octubre" */
+export function rangoTexto(p: Periodo): string {
+  const { ini, fin } = rangoDe(p)
+  return `del ${ini} al ${fin} de ${MESES[p.m]}`
+}
 export function folioStr(n: number): string { return String(n).padStart(4, '0') }
 
 // ── Estado (SPA: refs de módulo, por navegador). Se llena desde /api/data. ──
@@ -170,30 +192,31 @@ export function valueIn(g: Gasto, code: string): number { return convert(g.amoun
 export function total(list: Gasto[], code: string): number {
   return list.reduce((s, g) => s + valueIn(g, code), 0)
 }
-export function inMonth(list: Gasto[], y: number, m: number): Gasto[] {
-  return list.filter(g => g.date.getFullYear() === y && g.date.getMonth() === m)
-}
 export function onDay(list: Gasto[], d: Date): Gasto[] { return list.filter(g => sameDay(g.date, d)) }
+export function inPeriodo(list: Gasto[], p: Periodo): Gasto[] {
+  const { ini, fin } = rangoDe(p)
+  return list.filter(g => g.date.getFullYear() === p.y && g.date.getMonth() === p.m && g.date.getDate() >= ini && g.date.getDate() <= fin)
+}
 
-/** Serie diaria de un mes: [{ d: 1..n, v }] */
-export function dailySeries(list: Gasto[], y: number, m: number, code: string) {
-  const n = new Date(y, m + 1, 0).getDate()
-  const out = Array.from({ length: n }, (_, i) => ({ d: i + 1, v: 0, date: new Date(y, m, i + 1, 12) }))
-  for (const g of inMonth(list, y, m)) out[g.date.getDate() - 1]!.v += valueIn(g, code)
+/** Serie diaria de una quincena: [{ d: día del mes, v }] */
+export function dailySeriesPeriodo(list: Gasto[], p: Periodo, code: string) {
+  const { ini, fin } = rangoDe(p)
+  const out = Array.from({ length: fin - ini + 1 }, (_, i) => ({ d: ini + i, v: 0, date: new Date(p.y, p.m, ini + i, 12) }))
+  for (const g of inPeriodo(list, p)) out[g.date.getDate() - ini]!.v += valueIn(g, code)
   return out
+}
+/** Totales de las últimas `n` quincenas hasta `p` (incluida). */
+export function lastPeriodos(list: Gasto[], n: number, code: string, p: Periodo) {
+  return Array.from({ length: n }, (_, i) => {
+    const x = moverPeriodo(p, i - n + 1)
+    return { ...x, label: `${x.q ? '2.ª' : '1.ª'} ${MESES_COR[x.m]}`, v: total(inPeriodo(list, x), code) }
+  })
 }
 /** Últimos `n` días hasta `ref` (incluido). */
 export function lastDays(list: Gasto[], n: number, code: string, ref = hoy()) {
   return Array.from({ length: n }, (_, i) => {
     const d = addDays(ref, i - n + 1)
     return { date: d, v: total(onDay(list, d), code) }
-  })
-}
-/** Totales de los últimos `n` meses hasta (y, m). */
-export function lastMonths(list: Gasto[], n: number, code: string, y: number, m: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(y, m - (n - 1 - i), 1)
-    return { y: d.getFullYear(), m: d.getMonth(), label: MESES_COR[d.getMonth()]!, v: total(inMonth(list, d.getFullYear(), d.getMonth()), code) }
   })
 }
 export function byCategory(list: Gasto[], code: string) {

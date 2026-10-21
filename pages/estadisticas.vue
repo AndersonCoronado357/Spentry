@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {
-  hoy, inMonth, total, byCategory, dailySeries, lastMonths, formatMoney, formatShort,
-  MESES, DIAS_COR, chartColor, valueIn, catPorId, sameDay,
+  hoy, inPeriodo, total, byCategory, dailySeriesPeriodo, lastPeriodos, formatMoney, formatShort,
+  MESES_COR, DIAS_COR, chartColor, valueIn, catPorId, sameDay,
+  periodoDe, moverPeriodo, mismoPeriodo, ordenPeriodo, rangoDe, rangoTexto, etiquetaPeriodo, type Periodo,
 } from '~/composables/useDatos'
 
 useHead({ title: 'Estadísticas · Spentry' })
@@ -9,35 +10,40 @@ useHead({ title: 'Estadísticas · Spentry' })
 const { gastos, moneda } = useDatos()
 const { tema } = useTema()
 const { verRecibo } = useDetalle()
-// En celular el mes va junto al título, abreviado ("Oct 2026").
+// En celular la quincena va junto al título, abreviada ("16–31 oct").
 const movil = useMediaQuery('(max-width: 899px)')
 
-const y = ref(hoy().getFullYear())
-const m = ref(hoy().getMonth())
-const esActual = computed(() => y.value === hoy().getFullYear() && m.value === hoy().getMonth())
+const per = ref<Periodo>(periodoDe(hoy()))
+const esActual = computed(() => mismoPeriodo(per.value, periodoDe(hoy())))
 
-const delMes = computed(() => inMonth(gastos.value, y.value, m.value))
+const delMes = computed(() => inPeriodo(gastos.value, per.value))
 const totalMes = computed(() => total(delMes.value, moneda.value))
-// Comparación justa: en el mes en curso se compara contra los mismos días del
-// mes anterior (1 al día de hoy), no contra el mes anterior completo.
+// Comparación justa: en la quincena en curso se compara contra los mismos días
+// de la quincena anterior (sus primeros N días), no contra la quincena completa.
+const diasCont = computed(() => {
+  const { ini, fin } = rangoDe(per.value)
+  return esActual.value ? hoy().getDate() - ini + 1 : fin - ini + 1
+})
+const anterior = computed(() => moverPeriodo(per.value, -1))
+const tramoPrev = computed(() => {
+  const { ini, fin } = rangoDe(anterior.value)
+  return { ini, fin: esActual.value ? Math.min(fin, ini + diasCont.value - 1) : fin }
+})
 const prev = computed(() => {
-  const d = new Date(y.value, m.value - 1, 1)
-  const lista = inMonth(gastos.value, d.getFullYear(), d.getMonth())
-  const tope = esActual.value ? hoy().getDate() : 31
-  return total(lista.filter(g => g.date.getDate() <= tope), moneda.value)
+  const { ini, fin } = tramoPrev.value
+  return total(inPeriodo(gastos.value, anterior.value).filter(g => g.date.getDate() >= ini && g.date.getDate() <= fin), moneda.value)
 })
 const delta = computed(() => (prev.value ? (totalMes.value - prev.value) / prev.value : null))
-// Días transcurridos del mes (si es el actual) para un promedio diario honesto.
-const diasCont = computed(() => (esActual.value ? hoy().getDate() : new Date(y.value, m.value + 1, 0).getDate()))
+// Días transcurridos de la quincena (si es la actual) para un promedio diario honesto.
 const promedio = computed(() => totalMes.value / diasCont.value)
 const mayor = computed(() =>
   delMes.value.reduce<typeof delMes.value[number] | null>((a, b) => (!a || valueIn(b, moneda.value) > valueIn(a, moneda.value) ? b : a), null),
 )
 
 // Día a día
-const serie = computed(() => dailySeries(gastos.value, y.value, m.value, moneda.value))
+const serie = computed(() => dailySeriesPeriodo(gastos.value, per.value, moneda.value))
 const diaSel = ref<string | number | null>(null)
-watch([y, m], () => { diaSel.value = null; catSel.value = null })
+watch(per, () => { diaSel.value = null; catSel.value = null })
 const serieData = computed(() =>
   serie.value.map(d => ({
     key: d.d,
@@ -55,24 +61,24 @@ const catSel = ref<string | null>(null)
 const segs = computed(() => cats.value.map(c => ({ id: c.id, value: c.value, color: chartColor(c.color, tema.value), label: c.label })))
 const catActiva = computed(() => cats.value.find(c => c.id === catSel.value))
 
-// Últimos 6 meses
-const meses = computed(() => lastMonths(gastos.value, 6, moneda.value, hoy().getFullYear(), hoy().getMonth()))
+// Últimas 6 quincenas
+const meses = computed(() => lastPeriodos(gastos.value, 6, moneda.value, periodoDe(hoy())))
 const mesesData = computed(() =>
-  meses.value.map(d => ({ key: `${d.y}-${d.m}`, label: d.label, tip: `${MESES[d.m]} ${d.y}`, v: d.v, hl: d.y === y.value && d.m === m.value })),
+  meses.value.map(d => ({ key: `${d.y}-${d.m}-${d.q}`, label: d.label, tip: `${etiquetaPeriodo(d)} ${d.y}`, v: d.v, hl: mismoPeriodo(d, per.value) })),
 )
 const promMeses = computed(() => {
   const con = meses.value.filter(d => d.v > 0)
   return con.length ? con.reduce((s, d) => s + d.v, 0) / con.length : 0
 })
 function irAMes(key: string | number) {
-  const [yy, mm] = String(key).split('-').map(Number)
-  cambiarMes(yy!, mm!)
+  const [yy, mm, qq] = String(key).split('-').map(Number)
+  cambiarMes({ y: yy!, m: mm!, q: qq! })
 }
-// Al cambiar de mes, el contenido entra desde el lado hacia el que se navega.
+// Al cambiar de quincena, el contenido entra desde el lado hacia el que se navega.
 const dirMes = ref<'next' | 'prev'>('next')
-function cambiarMes(ny: number, nm: number) {
-  dirMes.value = ny * 12 + nm > y.value * 12 + m.value ? 'next' : 'prev'
-  y.value = ny; m.value = nm
+function cambiarMes(p: Periodo) {
+  dirMes.value = ordenPeriodo(p) > ordenPeriodo(per.value) ? 'next' : 'prev'
+  per.value = p
 }
 </script>
 
@@ -83,22 +89,22 @@ function cambiarMes(ny: number, nm: number) {
         <span class="eyebrow">Tu dinero</span>
         <h1 class="page-title">Estadísticas</h1>
       </div>
-      <StMonthSwitch :y="y" :m="m" :corto="movil" @change="cambiarMes" />
+      <StMonthSwitch :y="per.y" :m="per.m" :q="per.q" :corto="movil" @change="cambiarMes" />
     </header>
 
     <Transition :name="`mes-${dirMes}`" mode="out-in">
-    <div :key="`${y}-${m}`" class="stats-grid">
-      <!-- Resumen del mes -->
+    <div :key="ordenPeriodo(per)" class="stats-grid">
+      <!-- Resumen de la quincena -->
       <section class="card stats-hero">
         <div class="col" style="gap: 10px; min-width: 0">
-          <span class="muted" style="font-size: .92rem; font-weight: 700">Gastaste en {{ MESES[m] }}</span>
+          <span class="muted" style="font-size: .92rem; font-weight: 700">Gastaste {{ rangoTexto(per) }}</span>
           <span class="hero-num"><StOdometer :value="totalMes" :code="moneda" /></span>
           <span v-if="delta !== null" :class="['delta', delta > 0 ? 'up' : 'down']">
             <StIcon :name="delta > 0 ? 'arrowUp' : 'arrowDown'" :size="14" stroke="2.4" />
             {{ Math.abs(Math.round(delta * 100)) }}%
-            <span class="faint">vs. {{ esActual ? `1–${hoy().getDate()} de ${MESES[(m + 11) % 12]}` : MESES[(m + 11) % 12] }} ({{ formatShort(prev, moneda) }})</span>
+            <span class="faint">vs. {{ tramoPrev.ini }}–{{ tramoPrev.fin }} de {{ MESES_COR[anterior.m] }} ({{ formatShort(prev, moneda) }})</span>
           </span>
-          <span v-else class="faint" style="font-size: .86rem">Sin datos del mes anterior para comparar</span>
+          <span v-else class="faint" style="font-size: .86rem">Sin datos de la quincena anterior para comparar</span>
         </div>
         <div class="stats-meta">
           <div><span class="faint">Promedio diario</span><b class="num">{{ formatMoney(promedio, moneda) }}</b></div>
@@ -132,7 +138,7 @@ function cambiarMes(ny: number, nm: number) {
           :avg="promedio || null"
           :format-short="v => formatShort(v, moneda)"
           :selected="diaSel"
-          :label-every="5"
+          :label-every="movil ? 2 : 1"
           @pick="k => diaSel = diaSel === k ? null : k"
         />
       </section>
@@ -166,15 +172,15 @@ function cambiarMes(ny: number, nm: number) {
         </div>
         <div v-else class="empty fill-empty">
           <StIcon name="chart" :size="30" style="color: var(--text3)" />
-          <span class="muted" style="font-size: .9rem">Sin gastos en {{ MESES[m] }}</span>
+          <span class="muted" style="font-size: .9rem">Sin gastos {{ rangoTexto(per) }}</span>
         </div>
       </section>
 
-      <!-- Últimos 6 meses -->
+      <!-- Últimas 6 quincenas -->
       <section class="card chart-card months">
         <div class="spread" style="gap: 12px">
-          <span class="panel-title">Últimos 6 meses</span>
-          <span class="faint" style="font-size: .82rem">Toca un mes para verlo</span>
+          <span class="panel-title">Últimas 6 quincenas</span>
+          <span class="faint" style="font-size: .82rem">Toca una para verla</span>
         </div>
         <StBarChart
           fill

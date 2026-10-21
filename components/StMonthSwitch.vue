@@ -1,26 +1,30 @@
 <script setup lang="ts">
-// Selector de mes ‹ Octubre 2026 ›. La etiqueta entra desde el lado hacia el
-// que se navega (izquierda = mes anterior), para que el cambio tenga dirección.
-import { MESES, MESES_COR, hoy } from '~/composables/useDatos'
+// Selector de quincena ‹ 16–31 octubre 2026 ›. La etiqueta entra desde el lado
+// hacia el que se navega (izquierda = quincena anterior), para que el cambio tenga dirección.
+import { MESES, MESES_COR, hoy, rangoDe, moverPeriodo, mismoPeriodo, periodoDe, type Periodo } from '~/composables/useDatos'
 
-const props = defineProps<{ y: number; m: number; corto?: boolean }>()
-const emit = defineEmits<{ change: [y: number, m: number] }>()
+const props = defineProps<{ y: number; m: number; q: number; corto?: boolean }>()
+const emit = defineEmits<{ change: [p: Periodo] }>()
 
 const dir = ref<'next' | 'prev'>('next')
-const esActual = computed(() => props.y === hoy().getFullYear() && props.m === hoy().getMonth())
-const label = computed(() => `${(props.corto ? MESES_COR : MESES)[props.m]} ${props.y}`)
+const actual = computed<Periodo>(() => ({ y: props.y, m: props.m, q: props.q }))
+const esActual = computed(() => mismoPeriodo(actual.value, periodoDe(hoy())))
+const label = computed(() => {
+  const { ini, fin } = rangoDe(actual.value)
+  if (props.corto) return `${ini}–${fin} ${MESES_COR[props.m]}${props.y !== hoy().getFullYear() ? ` ${String(props.y).slice(2)}` : ''}`
+  return `${ini}–${fin} ${MESES[props.m]} ${props.y}`
+})
 
 function mover(delta: number) {
   if (delta > 0 && esActual.value) return
   dir.value = delta > 0 ? 'next' : 'prev'
-  const d = new Date(props.y, props.m + delta, 1)
-  emit('change', d.getFullYear(), d.getMonth())
+  emit('change', moverPeriodo(actual.value, delta))
 }
 </script>
 
 <template>
   <div :class="['month-switch', corto ? 'corto' : '']">
-    <button type="button" class="iconbtn bare sm" aria-label="Mes anterior" @click="mover(-1)">
+    <button type="button" class="iconbtn bare sm" aria-label="Quincena anterior" @click="mover(-1)">
       <StIcon name="chevronLeft" :size="18" />
     </button>
     <span class="month-label">
@@ -28,7 +32,7 @@ function mover(delta: number) {
         <span :key="label" class="month-text">{{ label }}</span>
       </Transition>
     </span>
-    <button type="button" class="iconbtn bare sm" aria-label="Mes siguiente" :disabled="esActual" :style="{ opacity: esActual ? .3 : 1 }" @click="mover(1)">
+    <button type="button" class="iconbtn bare sm" aria-label="Quincena siguiente" :disabled="esActual" :style="{ opacity: esActual ? .3 : 1 }" @click="mover(1)">
       <StIcon name="chevronRight" :size="18" />
     </button>
   </div>
@@ -37,7 +41,7 @@ function mover(delta: number) {
 <style scoped>
 .month-switch { display: inline-flex; align-items: center; gap: 2px; background: var(--s2); border-radius: 999px; padding: 3px; }
 .month-switch .iconbtn.sm:hover { background: var(--s3); }
-.month-label { position: relative; display: inline-grid; min-width: 9.5em; height: 1.4em; overflow: hidden; text-align: center; }
+.month-label { position: relative; display: inline-grid; min-width: 11.4em; height: 1.4em; overflow: hidden; text-align: center; }
 .corto .month-label { min-width: 5.4em; }
 .month-text {
   grid-area: 1 / 1; font-family: var(--font-title); font-weight: 600; font-size: .92rem;

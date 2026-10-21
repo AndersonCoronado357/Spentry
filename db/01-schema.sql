@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   photo         MEDIUMTEXT    NULL,
   initials      VARCHAR(8)    NOT NULL DEFAULT '',
   moneda        VARCHAR(8)    NOT NULL DEFAULT 'COP',
-  budget        BIGINT        NOT NULL DEFAULT 0,      -- presupuesto mensual (0 = sin presupuesto)
+  budget        BIGINT        NOT NULL DEFAULT 0,      -- presupuesto por quincena (0 = sin presupuesto)
   remind_daily  TINYINT(1)    NOT NULL DEFAULT 1,      -- recordatorio push diario
   remind_hour   TINYINT       NOT NULL DEFAULT 20,     -- hora local (Colombia) del recordatorio
   reminded_on   DATE          NULL,                    -- último día que se envió el recordatorio
