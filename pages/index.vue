@@ -57,6 +57,25 @@ const semanaData = computed(() =>
 const semanaTotal = computed(() => semana.value.reduce((s, d) => s + d.v, 0))
 const diaElegido = computed(() => semanaData.value.find(d => d.key === diaSel.value))
 
+// Desvanecido de "Anotar rápido" solo del lado donde quedan más chips.
+const chipsRef = ref<HTMLElement | null>(null)
+const masIzq = ref(false)
+const masDer = ref(false)
+function bordesChips() {
+  const e = chipsRef.value
+  if (!e) return
+  masIzq.value = e.scrollLeft > 2
+  masDer.value = e.scrollLeft < e.scrollWidth - e.clientWidth - 2
+}
+let roChips: ResizeObserver | null = null
+onMounted(() => {
+  bordesChips()
+  roChips = new ResizeObserver(bordesChips)
+  if (chipsRef.value) roChips.observe(chipsRef.value)
+})
+onBeforeUnmount(() => roChips?.disconnect())
+watch(() => categorias.value.length, () => nextTick(bordesChips))
+
 const atajos = computed(() => {
   const uso: Record<string, number> = {}
   for (const g of gastos.value) uso[g.category] = (uso[g.category] ?? 0) + 1
@@ -136,7 +155,7 @@ function anular(id: string) {
       <!-- Anotar rápido -->
       <section class="quick" aria-label="Anotar rápido">
         <span class="eyebrow quick-label">Anotar rápido</span>
-        <div class="quick-chips scroll-x">
+        <div ref="chipsRef" :class="['quick-chips', 'scroll-x', masIzq ? 'mas-izq' : '', masDer ? 'mas-der' : '']" @scroll.passive="bordesChips">
           <button v-for="c in atajos" :key="c.id" type="button" class="quick-chip" @click="registrar({ categoria: c.id })">
             <StCatIcon :icon="c.icon" :color="c.color" :size="30" />{{ c.label }}
           </button>

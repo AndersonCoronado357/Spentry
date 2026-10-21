@@ -178,11 +178,20 @@
 .week { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .quick { display: flex; align-items: center; gap: 14px; min-width: 0; flex-shrink: 0; }
 .quick-label { flex-shrink: 0; }
-.quick-chips {
-  display: flex; gap: 8px; padding: 2px; min-width: 0;
-  /* Si no caben, se desvanecen en el borde para que se note que hay más. */
+.quick-chips { display: flex; gap: 8px; padding: 2px; min-width: 0; }
+/* Si no caben, se desvanecen solo en el borde donde queda más por ver: al
+   llegar al final, el último chip se ve completo. */
+.quick-chips.mas-der {
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
           mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
+}
+.quick-chips.mas-izq {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 48px);
+          mask-image: linear-gradient(90deg, transparent, #000 48px);
+}
+.quick-chips.mas-izq.mas-der {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
 }
 @media (max-width: 899px) {
   .quick { flex-direction: column; align-items: stretch; gap: 8px; }
