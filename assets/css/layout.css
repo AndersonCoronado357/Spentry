@@ -107,6 +107,14 @@
 }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: clamp(14px, 1.8vw, 22px); flex-shrink: 0; }
 .page-head .col { gap: 4px; }
+/* Celular angosto: el título se achica un poco antes que chocar con lo de la
+   derecha; y si aun así no cabe, eso baja a la línea siguiente (nunca encima). */
+@media (max-width: 899px) {
+  .page-head { flex-wrap: wrap; gap: 10px; }
+  .page-head > .col { min-width: max-content !important; }   /* las plantillas fijan min-width: 0 en línea */
+  .page-head > :last-child:not(.col) { margin-left: auto; }
+  .page-head .page-title { font-size: clamp(1.45rem, 6.9vw, 1.65rem); }
+}
 .page-title {
   font-family: var(--font-title); font-weight: 600; font-size: clamp(1.65rem, 2.8vw, 2.2rem);
   letter-spacing: -.03em; margin: 0; color: var(--text); line-height: 1.05;

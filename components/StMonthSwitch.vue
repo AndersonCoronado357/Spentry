@@ -42,7 +42,10 @@ function mover(delta: number) {
 .month-switch { display: inline-flex; align-items: center; gap: 2px; background: var(--s2); border-radius: 999px; padding: 3px; }
 .month-switch .iconbtn.sm:hover { background: var(--s3); }
 .month-label { position: relative; display: inline-grid; min-width: 11.4em; height: 1.4em; overflow: hidden; text-align: center; }
-.corto .month-label { min-width: 5.4em; }
+/* Celular: más compacto, para que nunca se monte sobre el título. */
+.corto .iconbtn.sm { width: 32px; height: 32px; }
+.corto .month-label { min-width: 5em; }
+.corto .month-text { font-size: .88rem; }
 .month-text {
   grid-area: 1 / 1; font-family: var(--font-title); font-weight: 600; font-size: .92rem;
   text-transform: capitalize; white-space: nowrap; color: var(--text);
