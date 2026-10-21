@@ -259,10 +259,10 @@ const fmtCorto = (v: number) => formatShort(v, moneda.value)
           <div :class="['expand', passAbierto ? 'open' : '']">
             <div class="expand-inner">
               <div class="pass-form">
-                <StPasswordField v-if="hasPassword" v-model="passActual" label="Contraseña actual" placeholder="········" autocomplete="current-password" />
+                <StPasswordField v-if="hasPassword" v-model="passActual" label="Contraseña actual" placeholder="Tu contraseña actual" autocomplete="current-password" />
                 <div class="form-row-2">
                   <StPasswordField v-model="passNueva" label="Nueva contraseña" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
-                  <StPasswordField v-model="passConfirma" label="Repítela" placeholder="········" autocomplete="new-password" />
+                  <StPasswordField v-model="passConfirma" label="Repítela" placeholder="Escríbela otra vez" autocomplete="new-password" />
                 </div>
                 <p v-if="passError" class="form-error">{{ passError }}</p>
                 <button type="button" class="btn btn-primary btn-block" :disabled="passCargando" @click="guardarPass">

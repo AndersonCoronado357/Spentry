@@ -194,7 +194,7 @@ const PASOS = [
                 <StPasswordField
                   v-model="pass"
                   label="Contraseña"
-                  :placeholder="modo === 'crear' ? 'Mínimo 8 caracteres' : '········'"
+                  :placeholder="modo === 'crear' ? 'Mínimo 8 caracteres' : 'Tu contraseña'"
                   :autocomplete="modo === 'crear' ? 'new-password' : 'current-password'"
                 />
                 <button v-if="modo === 'iniciar'" type="button" class="login-link" style="align-self: flex-end" @click="cambiar('recuperar')">
