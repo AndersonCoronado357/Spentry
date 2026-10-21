@@ -140,6 +140,7 @@ watch(() => ruta.query.registrar, (v) => {
     </div>
 
     <StRegistro />
+    <StFijoForm />
     <StDetalle />
     <StToaster />
   </div>

@@ -1,6 +1,6 @@
 // Estado global de la interfaz: la caja registradora (registrar/editar gasto),
 // el recibo abierto en detalle y los avisos (toasts).
-import type { Gasto } from '~/types/gasto'
+import type { Gasto, Fijo } from '~/types/gasto'
 
 // ── Caja registradora (modal) ──────────────────────────────────
 const _reg = reactive({
@@ -25,6 +25,22 @@ export function useRegistro() {
 export function useRegistrar() {
   const { abrir } = useRegistro()
   return (opts: { categoria?: string } = {}) => abrir({ categoria: opts.categoria })
+}
+
+// ── Gasto fijo (modal para agregar o editar) ───────────────────
+// fijo: cambia desde la quincena en curso (y su recibo de esta quincena).
+// Solo recibo: el fijo tal como quedó en una quincena anterior; se cambia solo ahí.
+const _fijoHoja = reactive({ abierto: false, fijo: null as Fijo | null, recibo: null as Gasto | null })
+export function useFijoHoja() {
+  return {
+    hoja: _fijoHoja,
+    abrirFijo: (f: Fijo | null = null, recibo: Gasto | null = null) => {
+      _fijoHoja.fijo = f
+      _fijoHoja.recibo = recibo
+      _fijoHoja.abierto = true
+    },
+    cerrarFijo: () => { _fijoHoja.abierto = false },
+  }
 }
 
 // ── Recibo en detalle (modal) ──────────────────────────────────

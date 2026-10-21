@@ -85,6 +85,7 @@ const progreso = computed(() => Math.min(1, -dx.value / 90))
         <span class="gr-sub ellipsis">
           {{ gasto.note ? cat.label : 'Sin nota' }}
           <template v-if="showDate"> · {{ dateLabel }}</template>
+          <template v-else-if="gasto.fijo"> · Fijo</template>
           <template v-else> · {{ fmtTime(gasto.createdAt) }}</template>
         </span>
       </span>

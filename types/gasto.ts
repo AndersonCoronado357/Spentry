@@ -11,6 +11,18 @@ export interface Gasto {
   note: string
   date: Date
   createdAt: Date
+  /** Gasto fijo que dejó este recibo en su quincena (sin valor = gasto del día a día). */
+  fijo?: string | null
+}
+
+/** Gasto fijo: se repite en cada quincena. */
+export interface Fijo {
+  id: string
+  label: string
+  amount: number
+  currency: string
+  category: string
+  sort: number
 }
 
 export interface Categoria {

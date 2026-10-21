@@ -2,12 +2,13 @@
 // Recibo en detalle (modal): el ticket completo, editar y anular. Anular se
 // hace manteniendo presionado (lento al decidir, rápido al soltar): evita
 // borrados por error sin un diálogo de confirmación.
-import { useDatos, folioStr, formatMoney } from '~/composables/useDatos'
+import { useDatos, folioStr, formatMoney, hoy, periodoDe, mismoPeriodo } from '~/composables/useDatos'
 import { tactil } from '~/composables/useTema'
 
 const { detalleId, cerrarRecibo } = useDetalle()
-const { porId, moneda, borrar, restaurar } = useDatos()
+const { porId, moneda, borrar, restaurar, fijos } = useDatos()
 const { abrir } = useRegistro()
+const { abrirFijo } = useFijoHoja()
 const { mostrar } = useToast()
 
 // Se conserva el último gasto mostrado para que la hoja no se vacíe al cerrarse.
@@ -19,6 +20,13 @@ function editar() {
   if (!g.value) return
   const gasto = g.value
   cerrarRecibo()
+  // El recibo de un fijo se edita con su caja: en la quincena en curso cambia el
+  // fijo (desde ahora); en una anterior, solo ese recibo.
+  if (gasto.fijo) {
+    const f = mismoPeriodo(periodoDe(gasto.date), periodoDe(hoy())) ? fijos.value.find(x => x.id === gasto.fijo) : undefined
+    setTimeout(() => abrirFijo(f ?? null, gasto), 120)
+    return
+  }
   setTimeout(() => abrir({ gasto }), 120)
 }
 

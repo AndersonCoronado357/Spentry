@@ -44,8 +44,8 @@ const codigo = computed(() => `${folioStr(props.gasto.folio)}-${(isoD(props.gast
       <span>{{ fecha }}</span>
     </div>
     <div class="tk-line tk-mute">
-      <span>Registrado</span>
-      <span>{{ fmtTime(gasto.createdAt) }}</span>
+      <span>{{ gasto.fijo ? 'Gasto fijo' : 'Registrado' }}</span>
+      <span>{{ gasto.fijo ? 'Cada quincena' : fmtTime(gasto.createdAt) }}</span>
     </div>
 
     <div class="tk-rule" />

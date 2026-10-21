@@ -1,4 +1,4 @@
-import type { Gasto, Categoria, MonedaInfo } from '~/types/gasto'
+import type { Gasto, Categoria, MonedaInfo, Fijo } from '~/types/gasto'
 
 // ── Monedas ────────────────────────────────────────────────────
 const RATE_TO_COP: Record<string, number> = {
@@ -164,6 +164,8 @@ export function etiquetaPeriodo(p: Periodo, corto = false): string {
   const { ini, fin } = rangoDe(p)
   return corto ? `${ini}–${fin} ${MESES_COR[p.m]}` : `${ini}–${fin} de ${MESES[p.m]}`
 }
+/** Primer día de la quincena: ahí queda el recibo de cada gasto fijo. */
+export function inicioPeriodo(p: Periodo): Date { return new Date(p.y, p.m, rangoDe(p).ini, 12) }
 /** "del 16 al 31 de octubre" */
 export function rangoTexto(p: Periodo): string {
   const { ini, fin } = rangoDe(p)
@@ -177,6 +179,7 @@ const _categorias = ref<Categoria[]>([])
 const _user = ref({ name: '', email: '', photo: null as string | null })
 const _moneda = ref('COP')
 const _budget = ref(0)
+const _fijos = ref<Fijo[]>([])
 const _remindDaily = ref(true)
 const _remindHour = ref(20)
 const _hasPassword = ref(true)
@@ -193,6 +196,8 @@ export function total(list: Gasto[], code: string): number {
   return list.reduce((s, g) => s + valueIn(g, code), 0)
 }
 export function onDay(list: Gasto[], d: Date): Gasto[] { return list.filter(g => sameDay(g.date, d)) }
+/** Sin los recibos de gastos fijos: lo del día a día (un fijo es de la quincena, no de un día). */
+export function sinFijos(list: Gasto[]): Gasto[] { return list.filter(g => !g.fijo) }
 export function inPeriodo(list: Gasto[], p: Periodo): Gasto[] {
   const { ini, fin } = rangoDe(p)
   return list.filter(g => g.date.getFullYear() === p.y && g.date.getMonth() === p.m && g.date.getDate() >= ini && g.date.getDate() <= fin)
@@ -255,20 +260,24 @@ function hydrate(a: any): Gasto {
     note: a.note ?? '',
     date: parseD(a.date) ?? new Date(),
     createdAt: parseDT(a.createdAt),
+    fijo: a.fixedId ?? null,
   }
 }
 function serialize(g: Partial<Gasto>): any {
   const out: any = { ...g }
   if (g.date) out.date = isoD(g.date)
+  if ('fijo' in out) { out.fixedId = out.fijo ?? null; delete out.fijo }
   delete out.createdAt
   return out
 }
 
 export async function cargarDatos(): Promise<void> {
   try {
-    const res: any = await $fetch('/api/data')
+    // El día local define la quincena en curso: hasta ahí deja su recibo cada fijo.
+    const res: any = await $fetch('/api/data', { query: { hoy: isoD(hoy()) } })
     _gastos.value = (res.gastos || []).map(hydrate)
     _categorias.value = res.categorias || []
+    _fijos.value = (res.fijos || []).map((f: any) => ({ id: f.id, label: f.label, amount: Number(f.amount), currency: f.currency, category: f.category, sort: Number(f.sort) }))
     _user.value = { name: res.perfil?.name ?? '', email: res.perfil?.email ?? '', photo: res.perfil?.photo ?? null }
     _moneda.value = res.perfil?.moneda ?? 'COP'
     _budget.value = Number(res.perfil?.budget ?? 0)
@@ -349,9 +358,55 @@ export function useDatos() {
     return true
   }
 
+  // ── Gastos fijos ──
+  // Cada fijo deja su recibo en cada quincena (con el precio de ese momento).
+  // Crear, cambiar o quitar un fijo toca solo el recibo de la quincena en curso:
+  // las anteriores quedan como estaban.
+  function reciboFijo(id: string, p: Periodo = periodoDe(hoy())) {
+    return inPeriodo(_gastos.value, p).find(g => g.fijo === id)
+  }
+  function crearFijo(f: Omit<Fijo, 'id' | 'sort'>): Fijo {
+    const nuevo: Fijo = { ...f, label: f.label.trim(), id: nuevoId(), sort: _fijos.value.length + 1 }
+    const recibo: Gasto = {
+      id: nuevoId(), folio: siguienteFolio(), amount: nuevo.amount, currency: nuevo.currency, category: nuevo.category,
+      note: nuevo.label, date: inicioPeriodo(periodoDe(hoy())), createdAt: new Date(), fijo: nuevo.id,
+    }
+    _fijos.value = [..._fijos.value, nuevo]
+    _gastos.value = [recibo, ..._gastos.value]
+    bg(
+      $fetch<{ gasto: any }>('/api/fixed', { method: 'POST', body: { ...nuevo, gastoId: recibo.id, hoy: isoD(hoy()) } }).then((r) => {
+        const i = _gastos.value.findIndex(x => x.id === recibo.id)
+        if (i >= 0 && r?.gasto) _gastos.value[i] = hydrate(r.gasto)
+      }),
+    )
+    return nuevo
+  }
+  function editarFijo(id: string, patch: Partial<Pick<Fijo, 'label' | 'amount' | 'category'>>) {
+    const i = _fijos.value.findIndex(f => f.id === id)
+    if (i >= 0) _fijos.value[i] = { ...(_fijos.value[i] as Fijo), ...patch }
+    const r = reciboFijo(id)
+    if (r) {
+      const j = _gastos.value.findIndex(g => g.id === r.id)
+      _gastos.value[j] = {
+        ...r,
+        ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+        ...(patch.category !== undefined ? { category: patch.category } : {}),
+        ...(patch.label !== undefined ? { note: patch.label } : {}),
+      }
+    }
+    bg($fetch(`/api/fixed/${id}`, { method: 'PATCH', body: { ...patch, hoy: isoD(hoy()) } }))
+  }
+  function quitarFijo(id: string) {
+    const r = reciboFijo(id)
+    _fijos.value = _fijos.value.filter(f => f.id !== id)
+    if (r) _gastos.value = _gastos.value.filter(g => g.id !== r.id)
+    bg($fetch(`/api/fixed/${id}`, { method: 'DELETE', query: { hoy: isoD(hoy()) } }))
+  }
+
   return {
     gastos: _gastos,
     categorias: _categorias,
+    fijos: _fijos,
     usuario: _user,
     moneda: _moneda,
     budget: _budget,
@@ -360,5 +415,6 @@ export function useDatos() {
     hasPassword: _hasPassword,
     porId, siguienteFolio, crear, actualizar, borrar, restaurar,
     añadirCategoria, editarCategoria, quitarCategoria,
+    reciboFijo, crearFijo, editarFijo, quitarFijo,
   }
 }

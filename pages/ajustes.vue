@@ -86,9 +86,9 @@ async function guardarPass() {
 // ── Datos ──
 function exportarCSV() {
   const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`
-  const filas = [['Folio', 'Fecha', 'Categoría', 'Nota', 'Monto', 'Moneda']]
+  const filas = [['Folio', 'Fecha', 'Categoría', 'Nota', 'Monto', 'Moneda', 'Tipo']]
   for (const g of [...gastos.value].sort((a, b) => a.date.getTime() - b.date.getTime())) {
-    filas.push([folioStr(g.folio), isoD(g.date)!, catPorId(g.category).label, g.note, String(g.amount), g.currency])
+    filas.push([folioStr(g.folio), isoD(g.date)!, catPorId(g.category).label, g.note, String(g.amount), g.currency, g.fijo ? 'Fijo' : 'Diario'])
   }
   const csv = '﻿' + filas.map(f => f.map(esc).join(',')).join('\r\n')
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))

@@ -383,6 +383,17 @@
 .catf-tile { display: flex; }
 .catf-name { font-weight: 600; font-size: 1.15rem; max-width: 100%; }
 .catf-move { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+/* ── Gastos fijos (filtro Fijos de Movimientos) ─────────────── */
+.fijo-row { display: flex; align-items: center; gap: 8px; }
+.fijo-row .grow-row { flex: 1; min-width: 0; }
+.tape-foot {
+  display: flex; flex-direction: column; gap: 12px; margin: 0 4px; padding: 14px 8px 12px; flex-shrink: 0;
+  border-top: 2px dashed var(--hair2);
+}
+.tape-foot-sum { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: .9rem; }
+.tape-foot-sum .num { font-size: 1.05rem; }
+button.link-more { border: 0; font-family: inherit; cursor: pointer; gap: 6px; }
 .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
 .icon-opt {
   aspect-ratio: 1; border: 0; border-radius: 999px; background: var(--s2); color: var(--text2);

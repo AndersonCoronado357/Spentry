@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   hoy, inPeriodo, onDay, total, byCategory, lastDays, formatMoney, formatShort,
-  DIAS_COR, dayLabel, folioStr, sameDay, periodoDe, rangoDe,
+  DIAS_COR, dayLabel, folioStr, sameDay, periodoDe, rangoDe, sinFijos,
 } from '~/composables/useDatos'
 
 useHead({ title: 'Inicio · Spentry' })
@@ -26,12 +26,15 @@ const ahora = hoy()
 const per = periodoDe(ahora)
 const { ini, fin } = rangoDe(per)
 
+// Los fijos cuentan en el total, el presupuesto y las categorías de la quincena;
+// lo que mide días (hoy, promedio, últimos 7 días, últimos recibos) es lo del día a día.
+const diarios = computed(() => sinFijos(gastos.value))
 const delMes = computed(() => inPeriodo(gastos.value, per))
 const totalMes = computed(() => total(delMes.value, moneda.value))
-const totalHoy = computed(() => total(onDay(gastos.value, ahora), moneda.value))
-const promedio = computed(() => totalMes.value / (ahora.getDate() - ini + 1))
+const totalHoy = computed(() => total(onDay(diarios.value, ahora), moneda.value))
+const promedio = computed(() => total(sinFijos(delMes.value), moneda.value) / (ahora.getDate() - ini + 1))
 const recientes = computed(() =>
-  [...gastos.value]
+  [...diarios.value]
     .sort((a, b) => b.date.getTime() - a.date.getTime() || b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 30),
 )
@@ -43,7 +46,7 @@ const recientesVista = congelado(() => recientes.value)
 const usoPct = computed(() => (budget.value ? totalMes.value / budget.value : 0))
 const excedido = computed(() => budget.value > 0 && totalMes.value > budget.value)
 
-const semana = computed(() => lastDays(gastos.value, 7, moneda.value, ahora))
+const semana = computed(() => lastDays(diarios.value, 7, moneda.value, ahora))
 const diaSel = ref<string | number | null>(null)
 const semanaData = computed(() =>
   semana.value.map(d => ({

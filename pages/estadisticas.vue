@@ -2,7 +2,7 @@
 import {
   hoy, inPeriodo, total, byCategory, dailySeriesPeriodo, lastPeriodos, formatMoney, formatShort,
   MESES_COR, DIAS_COR, chartColor, valueIn, catPorId, sameDay,
-  periodoDe, moverPeriodo, mismoPeriodo, ordenPeriodo, rangoDe, rangoTexto, etiquetaPeriodo, type Periodo,
+  periodoDe, moverPeriodo, mismoPeriodo, ordenPeriodo, rangoDe, rangoTexto, etiquetaPeriodo, sinFijos, type Periodo,
 } from '~/composables/useDatos'
 
 useHead({ title: 'Estadísticas · Spentry' })
@@ -34,14 +34,19 @@ const prev = computed(() => {
   return total(inPeriodo(gastos.value, anterior.value).filter(g => g.date.getDate() >= ini && g.date.getDate() <= fin), moneda.value)
 })
 const delta = computed(() => (prev.value ? (totalMes.value - prev.value) / prev.value : null))
+// Los fijos cuentan en el total, las categorías y las quincenas; lo que mide días
+// (promedio diario, día a día, día más caro, gasto más alto) es lo del día a día:
+// un fijo es de la quincena, no de un día.
+const diarios = computed(() => sinFijos(delMes.value))
+const totalFijos = computed(() => totalMes.value - total(diarios.value, moneda.value))
 // Días transcurridos de la quincena (si es la actual) para un promedio diario honesto.
-const promedio = computed(() => totalMes.value / diasCont.value)
+const promedio = computed(() => total(diarios.value, moneda.value) / diasCont.value)
 const mayor = computed(() =>
-  delMes.value.reduce<typeof delMes.value[number] | null>((a, b) => (!a || valueIn(b, moneda.value) > valueIn(a, moneda.value) ? b : a), null),
+  diarios.value.reduce<typeof delMes.value[number] | null>((a, b) => (!a || valueIn(b, moneda.value) > valueIn(a, moneda.value) ? b : a), null),
 )
 
 // Día a día
-const serie = computed(() => dailySeriesPeriodo(gastos.value, per.value, moneda.value))
+const serie = computed(() => dailySeriesPeriodo(sinFijos(gastos.value), per.value, moneda.value))
 const diaSel = ref<string | number | null>(null)
 watch(per, () => { diaSel.value = null; catSel.value = null })
 const serieData = computed(() =>
@@ -129,7 +134,7 @@ function cambiarMes(p: Periodo) {
       <section class="card chart-card daily">
         <div class="spread" style="gap: 12px">
           <span class="panel-title">Día a día</span>
-          <span class="faint" style="font-size: .82rem">Línea: promedio diario</span>
+          <span class="faint" style="font-size: .82rem">{{ totalFijos ? 'Línea: promedio · sin fijos' : 'Línea: promedio diario' }}</span>
         </div>
         <StBarChart
           fill
