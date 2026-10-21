@@ -73,14 +73,27 @@ const PATRONES = [
   ['educacion', ['Curso en línea', 'Libro técnico', 'Fotocopias'], [5000, 150000], 0.04],
   ['viajes', ['Tiquete', 'Hotel', 'Peajes'], [45000, 380000], 0.02],
 ]
-const FIJOS = [
-  [1, 'hogar', 'Arriendo', 950000],
-  [3, 'gimnasio', 'Mensualidad', 99000],
-  [5, 'servicios', 'Internet', 89900],
-  [8, 'servicios', 'Luz y agua', 142000],
-  [12, 'servicios', 'Plan de celular', 45000],
-  [20, 'hogar', 'Administración', 180000],
+// Gastos fijos de cada quincena (tabla fixed_expenses). Cada quincena dejan su
+// recibo con el precio que tenían entonces, así el historial muestra los cambios.
+// [id, categoría, nombre, monto actual, quincenas que lleva (null = todo el
+//  historial), precios anteriores [[desde hace N quincenas, monto]]]
+const FIJOS_Q = [
+  ['fijoarriendo', 'hogar', 'Arriendo', 475000, null, [[6, 450000]]],
+  ['fijoadmin', 'hogar', 'Administración', 90000, null, [[6, 85000]]],
+  ['fijomercado', 'mercado', 'Mercado', 180000, null, []],
+  ['fijopasajes', 'transporte', 'Pasajes', 60000, null, [[8, 55000]]],
+  ['fijogasolina', 'gasolina', 'Gasolina', 120000, null, []],
+  ['fijointernet', 'servicios', 'Internet', 45000, null, [[4, 42000]]],
+  ['fijoluz', 'servicios', 'Luz y agua', 71000, null, [[3, 68500], [7, 66000]]],
+  ['fijocelular', 'servicios', 'Plan de celular', 22500, null, []],
+  ['fijogimnasio', 'gimnasio', 'Gimnasio', 49500, 8, []],
+  ['fijostreaming', 'ocio', 'Streaming', 19900, null, [[5, 17900]]],
+  ['fijocurso', 'educacion', 'Cuota del curso', 75000, 6, []],
+  ['fijoseguro', 'salud', 'Seguro médico', 38000, null, []],
 ]
+// Quincenas con el mismo orden que la app: año*24 + mes*2 + (0 del 1 al 15, 1 del 16 en adelante).
+const quincenaDe = (d) => d.getFullYear() * 24 + d.getMonth() * 2 + (d.getDate() <= 15 ? 0 : 1)
+const inicioDe = (o) => `${Math.floor(o / 24)}-${String(Math.floor((o % 24) / 2) + 1).padStart(2, '0')}-${o % 2 ? '16' : '01'}`
 
 // SEED_EMAIL=<correo> carga los datos en una cuenta YA existente (p. ej. la
 // tuya en producción) sin borrar nada: agrega las categorías que falten y suma
@@ -118,6 +131,7 @@ if (SEED_EMAIL) {
     await db.query('UPDATE users SET password_hash = ?, budget = ? WHERE id = ?', [hash(PASSWORD), 4000000, userId])
   }
   await db.query('DELETE FROM expenses WHERE user_id = ?', [userId])
+  await db.query('DELETE FROM fixed_expenses WHERE user_id = ?', [userId])
   await db.query('DELETE FROM categories WHERE user_id = ?', [userId])
   for (const [i, c] of CATS.entries()) {
     await db.query('INSERT INTO categories (user_id, id, label, icon, color, sort) VALUES (?,?,?,?,?,?)', [userId, c[0], c[1], c[2], c[3], i])
@@ -131,8 +145,9 @@ const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 
 const hoy = new Date()
 hoy.setHours(12, 0, 0, 0)
+const DIAS = 185
 const rows = []
-for (let back = 185; back >= 0; back--) {
+for (let back = DIAS; back >= 0; back--) {
   const d = new Date(hoy)
   d.setDate(d.getDate() - back)
   const finDe = d.getDay() === 0 || d.getDay() === 6
@@ -141,20 +156,36 @@ for (let back = 185; back >= 0; back--) {
     if (rnd() < prob) {
       const v = Math.round((lo + rnd() * (hi - lo)) / 50) * 50
       const h = 7 + Math.floor(rnd() * 14)
-      rows.push([cat, pick(notas), v, iso(d), `${iso(d)} ${String(h).padStart(2, '0')}:${String(Math.floor(rnd() * 60)).padStart(2, '0')}:00`])
+      rows.push([cat, pick(notas), v, iso(d), `${iso(d)} ${String(h).padStart(2, '0')}:${String(Math.floor(rnd() * 60)).padStart(2, '0')}:00`, null])
     }
   }
-  for (const [dia, cat, nota, v] of FIJOS) {
-    if (d.getDate() === dia) rows.push([cat, nota, v, iso(d), `${iso(d)} 09:00:00`])
+}
+// El recibo de cada fijo en cada quincena del historial, con su precio de entonces.
+const actual = quincenaDe(hoy)
+if (!SEED_EMAIL) {
+  const primera = quincenaDe(new Date(hoy.getTime() - DIAS * 86400000))
+  for (let p = primera; p <= actual; p++) {
+    const hace = actual - p
+    for (const [i, [fid, cat, nota, v, lleva, antes]] of FIJOS_Q.entries()) {
+      if (lleva != null && hace >= lleva) continue
+      const precio = antes.filter(([n]) => hace >= n).reduce((m, [, x]) => x, v)
+      rows.push([cat, nota, precio, inicioDe(p), `${inicioDe(p)} 06:${String(i).padStart(2, '0')}:00`, fid])
+    }
   }
 }
 rows.sort((a, b) => a[4].localeCompare(b[4]))
 let folio = folioBase
-for (const [cat, note, amount, date, created] of rows) {
+if (!SEED_EMAIL) {
+  for (const [i, [fid, cat, nota, v]] of FIJOS_Q.entries()) {
+    // gen: ya dejaron su recibo hasta la quincena en curso (la app sigue desde la próxima).
+    await db.query('INSERT INTO fixed_expenses (id, user_id, label, amount, currency, category, sort, gen) VALUES (?,?,?,?,?,?,?,?)', [fid, userId, nota, v, 'COP', cat, i + 1, actual])
+  }
+}
+for (const [cat, note, amount, date, created, fid] of rows) {
   folio++
   await db.query(
-    'INSERT INTO expenses (id, user_id, folio, amount, currency, category, note, spent_on, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-    ['g' + randomBytes(9).toString('hex'), userId, folio, amount, 'COP', cat, note || null, date, created],
+    'INSERT INTO expenses (id, user_id, folio, amount, currency, category, note, spent_on, created_at, fixed_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ['g' + randomBytes(9).toString('hex'), userId, folio, amount, 'COP', cat, note || null, date, created, fid],
   )
 }
 await db.end()

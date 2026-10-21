@@ -1,4 +1,4 @@
-// Repo de datos de Spentry (Nitro): gastos, categorías y perfil.
+// Repo de datos de Spentry (Nitro): gastos, categorías, gastos fijos y perfil.
 // Las fechas viajan como 'YYYY-MM-DD' (el cliente las hidrata a Date).
 // Importes en enteros de la moneda original.
 import type { RowDataPacket } from 'mysql2'
@@ -18,6 +18,7 @@ export interface ApiGasto {
   note: string | null
   date: string
   createdAt: string
+  fixedId: string | null
 }
 
 export interface ApiCategoria {
@@ -38,6 +39,7 @@ function mapGasto(r: any): ApiGasto {
     note: r.note,
     date: r.spent_on,
     createdAt: r.created_at,
+    fixedId: r.fixed_id ?? null,
   }
 }
 
@@ -46,6 +48,7 @@ const cleanNote = (v: unknown) => {
   return s || null
 }
 const cleanAmount = (v: unknown) => Math.max(0, Math.round(Number(v) || 0))
+const cleanId = (v: unknown) => (typeof v === 'string' && /^[a-z0-9]{1,32}$/i.test(v) ? v : null)
 
 // ── Gastos ─────────────────────────────────────────────────────
 export async function getGastos(userId: number): Promise<ApiGasto[]> {
@@ -83,9 +86,9 @@ export async function createGasto(userId: number, b: any): Promise<ApiGasto> {
     folio = Number(mx[0]?.f ?? 0) + 1
   }
   await db().query(
-    `INSERT INTO expenses (id, user_id, folio, amount, currency, category, note, spent_on)
-     VALUES (?,?,?,?,?,?,?,?)`,
-    [id, userId, folio, amount, String(b.currency || 'COP').slice(0, 8), String(b.category || 'otros').slice(0, 60), cleanNote(b.note), date]
+    `INSERT INTO expenses (id, user_id, folio, amount, currency, category, note, spent_on, fixed_id)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [id, userId, folio, amount, String(b.currency || 'COP').slice(0, 8), String(b.category || 'otros').slice(0, 60), cleanNote(b.note), date, cleanId(b.fixedId)]
   )
   return (await getGasto(userId, id))!
 }
@@ -187,6 +190,141 @@ export async function removeCategory(userId: number, id: string, moveTo?: string
   return true
 }
 
+// ── Gastos fijos ───────────────────────────────────────────────
+// Lo que se gasta fijo en cada quincena (arriendo, servicios…). Cada fijo deja
+// su propio recibo en cada quincena, con el precio que tenía en ese momento:
+// cambiarlo o quitarlo afecta de la quincena en curso en adelante y nunca toca
+// las anteriores. `gen` es la última quincena para la que ya dejó recibo.
+export interface ApiFijo {
+  id: string
+  label: string
+  amount: number
+  currency: string
+  category: string
+  sort: number
+}
+
+// Quincenas con el mismo orden que el cliente: año*24 + mes*2 + (0 del 1 al 15, 1 del 16 en adelante).
+const ordenDe = (y: number, m: number, d: number) => y * 24 + m * 2 + (d <= 15 ? 0 : 1)
+const inicioDe = (o: number) => {
+  const y = Math.floor(o / 24), m = Math.floor((o % 24) / 2)
+  return `${y}-${String(m + 1).padStart(2, '0')}-${o % 2 ? '16' : '01'}`
+}
+/** Quincena en curso según el día local del cliente ('YYYY-MM-DD'). Si no llega
+ *  o se aleja más de dos días del reloj del servidor, se usa el del servidor. */
+export function quincenaActual(hoy?: unknown): number {
+  const ahora = new Date()
+  if (typeof hoy === 'string' && RE_DATE.test(hoy)) {
+    const [y, m, d] = hoy.split('-').map(Number) as [number, number, number]
+    if (Math.abs(Date.UTC(y, m - 1, d) - ahora.getTime()) < 2 * 86400000) return ordenDe(y, m - 1, d)
+  }
+  return ordenDe(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
+}
+const MAX_ATRASO = 48 // si alguien vuelve tras mucho tiempo, como mucho dos años de quincenas
+
+/** Deja el recibo de cada fijo en las quincenas que aún no lo tienen (hasta la actual). */
+async function generarFijos(userId: number, actual: number): Promise<void> {
+  const [pend] = await db().query<RowDataPacket[]>(
+    'SELECT id FROM fixed_expenses WHERE user_id = ? AND (gen IS NULL OR gen < ?) LIMIT 1',
+    [userId, actual]
+  )
+  if (!pend.length) return
+  const cn = await db().getConnection()
+  try {
+    await cn.beginTransaction()
+    // FOR UPDATE: si dos pestañas cargan a la vez, la segunda espera y ya no encuentra pendientes.
+    const [fijos] = await cn.query<RowDataPacket[]>(
+      'SELECT * FROM fixed_expenses WHERE user_id = ? AND (gen IS NULL OR gen < ?) ORDER BY sort, created_at FOR UPDATE',
+      [userId, actual]
+    )
+    if (fijos.length) {
+      const [mx] = await cn.query<RowDataPacket[]>('SELECT COALESCE(MAX(folio),0) AS f FROM expenses WHERE user_id = ?', [userId])
+      let folio = Number(mx[0]?.f ?? 0)
+      const pares: [number, any][] = []
+      for (const f of fijos as any[]) {
+        const desde = f.gen == null ? actual : Math.max(Number(f.gen) + 1, actual - MAX_ATRASO + 1)
+        for (let p = desde; p <= actual; p++) pares.push([p, f])
+      }
+      pares.sort((a, b) => a[0] - b[0] || Number(a[1].sort) - Number(b[1].sort))
+      const filas = pares.map(([p, f]) => [eid(), userId, ++folio, Number(f.amount), f.currency, f.category, f.label, inicioDe(p), f.id])
+      if (filas.length) {
+        await cn.query('INSERT INTO expenses (id, user_id, folio, amount, currency, category, note, spent_on, fixed_id) VALUES ?', [filas])
+      }
+      await cn.query('UPDATE fixed_expenses SET gen = ? WHERE user_id = ? AND (gen IS NULL OR gen < ?)', [actual, userId, actual])
+    }
+    await cn.commit()
+  } catch (e) {
+    await cn.rollback()
+    throw e
+  } finally {
+    cn.release()
+  }
+}
+
+export async function getFijos(userId: number): Promise<ApiFijo[]> {
+  try {
+    const [rows] = await db().query<RowDataPacket[]>(
+      'SELECT id, label, amount, currency, category, sort FROM fixed_expenses WHERE user_id = ? ORDER BY sort, created_at',
+      [userId]
+    )
+    return (rows as any[]).map(r => ({ ...r, amount: Number(r.amount), sort: Number(r.sort) }))
+  } catch (e: any) {
+    // Sin la tabla (BD aún sin actualizar) la app sigue funcionando, solo sin fijos.
+    if (e?.code === 'ER_NO_SUCH_TABLE') return []
+    throw e
+  }
+}
+
+/** Crea el fijo y su recibo de la quincena en curso. */
+export async function createFijo(userId: number, b: any): Promise<{ fijo: ApiFijo; gasto: ApiGasto } | null> {
+  const id = cleanId(b.id) ?? eid()
+  const label = String(b.label ?? '').trim().slice(0, 80)
+  const amount = cleanAmount(b.amount)
+  if (!label || !amount) return null
+  const actual = quincenaActual(b.hoy)
+  const [mx] = await db().query<RowDataPacket[]>('SELECT COALESCE(MAX(sort),0) AS s FROM fixed_expenses WHERE user_id = ?', [userId])
+  const fijo: ApiFijo = {
+    id, label, amount,
+    currency: String(b.currency || 'COP').slice(0, 8),
+    category: String(b.category || 'otros').slice(0, 60),
+    sort: Number(mx[0]?.s ?? 0) + 1,
+  }
+  await db().query(
+    'INSERT INTO fixed_expenses (id, user_id, label, amount, currency, category, sort, gen) VALUES (?,?,?,?,?,?,?,?)',
+    [fijo.id, userId, fijo.label, fijo.amount, fijo.currency, fijo.category, fijo.sort, actual]
+  )
+  const gasto = await createGasto(userId, {
+    id: b.gastoId, amount: fijo.amount, currency: fijo.currency, category: fijo.category,
+    note: fijo.label, date: inicioDe(actual), fixedId: fijo.id,
+  })
+  return { fijo, gasto }
+}
+
+/** Cambia el fijo y su recibo de la quincena en curso; las anteriores quedan como estaban. */
+export async function updateFijo(userId: number, id: string, p: any): Promise<void> {
+  const sets: string[] = []
+  const vals: any[] = []
+  const label = p.label !== undefined ? String(p.label).trim().slice(0, 80) : ''
+  const amount = p.amount !== undefined ? cleanAmount(p.amount) : 0
+  const category = p.category !== undefined ? String(p.category).slice(0, 60) : ''
+  if (label) { sets.push('label = ?'); vals.push(label) }
+  if (amount) { sets.push('amount = ?'); vals.push(amount) }
+  if (category) { sets.push('category = ?'); vals.push(category) }
+  if (!sets.length) return
+  await db().query(`UPDATE fixed_expenses SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`, [...vals, id, userId])
+  const recibo = sets.map(x => x.replace('label', 'note'))
+  await db().query(
+    `UPDATE expenses SET ${recibo.join(', ')} WHERE user_id = ? AND fixed_id = ? AND spent_on = ?`,
+    [...vals, userId, id, inicioDe(quincenaActual(p.hoy))]
+  )
+}
+
+/** Quita el fijo y su recibo de la quincena en curso; los de quincenas anteriores se conservan. */
+export async function deleteFijo(userId: number, id: string, hoy?: unknown): Promise<void> {
+  await db().query('DELETE FROM fixed_expenses WHERE id = ? AND user_id = ?', [id, userId])
+  await db().query('DELETE FROM expenses WHERE user_id = ? AND fixed_id = ? AND spent_on = ?', [userId, id, inicioDe(quincenaActual(hoy))])
+}
+
 // ── Perfil ─────────────────────────────────────────────────────
 export async function updateProfile(userId: number, patch: any): Promise<void> {
   const map: Record<string, string> = {
@@ -210,11 +348,18 @@ export async function updateProfile(userId: number, patch: any): Promise<void> {
   await db().query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals)
 }
 
-export async function getAllData(userId: number, user: any) {
-  const [gastos, categorias] = await Promise.all([getGastos(userId), getCategories(userId)])
+export async function getAllData(userId: number, user: any, hoy?: unknown) {
+  // Antes de leer, cada fijo deja su recibo en las quincenas que aún no lo tienen.
+  try {
+    await generarFijos(userId, quincenaActual(hoy))
+  } catch (e: any) {
+    if (e?.code !== 'ER_NO_SUCH_TABLE' && e?.code !== 'ER_BAD_FIELD_ERROR') console.error('[fijos] no se pudieron generar los recibos:', e?.message)
+  }
+  const [gastos, categorias, fijos] = await Promise.all([getGastos(userId), getCategories(userId), getFijos(userId)])
   return {
     gastos,
     categorias,
+    fijos,
     perfil: {
       name: user.name,
       email: user.email,
